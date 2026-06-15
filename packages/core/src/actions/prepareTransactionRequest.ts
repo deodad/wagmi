@@ -128,6 +128,7 @@ export async function prepareTransactionRequest<
   const { account: account_, chainId, ...rest } = parameters
 
   let account: Address | Account | undefined
+  let client = config.getClient({ chainId })
   if (account_) account = account_
   else {
     const connectorClient = await getConnectorClient(config, {
@@ -136,9 +137,16 @@ export async function prepareTransactionRequest<
       chainId,
     })
     account = connectorClient.account
-  }
 
-  const client = config.getClient({ chainId })
+    // Scoped to connectors exposing their own client (e.g. an EIP-1193
+    // provider that selects the signer internally): run prepare against it
+    // so steps like `eth_fillTransaction` can be context aware. Other
+    // connectors keep using the app's RPC transport.
+    const connector = config.state.connections.get(
+      config.state.current!,
+    )?.connector
+    if (connector?.getClient) client = connectorClient
+  }
 
   const action = getAction(
     client,
